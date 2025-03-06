@@ -1,0 +1,564 @@
+---
+title: "Untitled"
+author: "Tingting"
+date: "2024-03-06"
+output: Fig.5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggforce)
+library(pheatmap)
+library(RColorBrewer)
+library(vegan)
+library(broom)
+library(ggstance)
+library(lubridate)
+library(readxl)
+library(ggpubr)
+library(janitor)
+library(rio)
+library(tidyr)
+library(caret)
+library(mlbench)
+library(doMC)
+library(caret)
+library(pROC)
+library(mixOmics)
+library(tidyverse)
+library(mixOmicsCaret)  
+library(mlbench)
+library(ggplot2)
+library(forcats)
+library(dplyr)
+library(openxlsx)
+```
+
+## R Markdown
+
+
+```{r cars}
+load("/Data/copsych_clinical.Rdata")
+load("/Ddata/copsych_predictors.Rdata")
+load("~/Data/covariat_all_15.Rdata")
+load("~/Data/diag_all_name.Rdata")
+
+all_annotation<-read.xlsx("~/Data/Chemical_Annotation_Common.xlsx")
+# Add "X" to the start of each cell in the specific column
+all_annotation$CHEM_ID <- paste("X", all_annotation$CHEM_ID, sep = "")
+
+longti_data<-read.xlsx("~/Data/all_anchor_norm_metabolome.xlsx")
+names(longti_data)[4:791] <- paste("X", names(longti_data)[4:791], sep = "")
+longti_data<-na.omit(longti_data)
+longti_data_1<-longti_data%>%filter(TP%in% c("Mor_w24","Mor_w1","6mth", "18mth", "6yr","10yr"))
+
+
+
+filtered_df_diag0<-left_join(diag_all_name[,c(1,3,5,8)],longti_data_2[,c(2,3:686)], by="ABCNO")
+filtered_df_diag0<-na.omit(filtered_df_diag0)
+```
+
+```{r}
+filtered_df_diag<-na.omit(filtered_df_diag0)
+filtered_df_diag$newID<- paste(filtered_df_diag$ABCNO, filtered_df_diag$TP, sep = "_")
+filtered_df_diag<- filtered_df_diag[,c(689,1:688)]
+filtered_df_diag_d<- filtered_df_diag[!duplicated(filtered_df_diag$newID), ]
+
+##############################################################################################################
+HARV_annotation<-read.xlsx("~/Data/Chemical_Annotation_Common.xlsx")
+HARV_annotation$CHEM_ID <- paste("X", HARV_annotation$CHEM_ID, sep = "")
+# Convert the relevant columns to character type if they are not already
+filtered_df_diag_d[7:ncol(filtered_df_diag_d)] <- lapply(filtered_df_diag_d[7:ncol(filtered_df_diag_d)], as.numeric)
+HARV_annotation$CHEM_ID<- as.character(HARV_annotation$CHEM_ID)
+HARV_annotation$CHEMICAL_NAME<- as.character(HARV_annotation$CHEMICAL_NAME)
+
+```
+
+w24 neu_fdr_w24_adjusted
+```{r}
+#ADHD
+Significant_adhd_w24_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_w24_adj.csv",row.names=1)%>%filter(p.value<0.05)
+adhd_fdr_w24_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_w24_adj.csv",row.names=1)
+#ASD
+asd_fdr_w24_adjusted<-read.csv("~/Data/Result_table_fdr_asd_w24_adj.csv",row.names=1)
+
+Significant_asd_w24_adjusted<-read.csv("~/Data/Result_table_fdr_asd_w24_adj.csv",row.names=1)%>%filter(p.value<0.05)
+#NEUDEV
+Significant_neu_w24_adjusted<-read.csv("~/Data/Result_table_fdr_NDD_w24_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+#colnames(Significant_neu_w24_adjusted)[5]<-"PValue"
+neu_fdr_w24_adjusted<-read.csv("~/Data/Result_table_fdr_NDD_w24_adj.csv",row.names=1)
+
+
+w24_all_sig<-rbind(Significant_adhd_w24_adjusted,Significant_asd_w24_adjusted,Significant_neu_w24_adjusted)
+w24_all_sig_d<-w24_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+w24_all<-rbind(adhd_fdr_w24_adjusted,asd_fdr_w24_adjusted,neu_fdr_w24_adjusted)
+w24_all_d<-w24_all%>%distinct(Metabolites, .keep_all=T)
+
+NDD_w24_a<- data.frame(
+  Metabolites = neu_fdr_w24_adjusted$Metabolites,
+ NDD_w24_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_w24_adjusted$OR, neu_fdr_w24_adjusted$CIL, neu_fdr_w24_adjusted$CIH, neu_fdr_w24_adjusted$p.value,neu_fdr_w24_adjusted$FDR))
+ADHD_w24_a<- data.frame(
+  Metabolites = adhd_fdr_w24_adjusted$Metabolites,
+ ADHD_w24_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_w24_adjusted$OR, adhd_fdr_w24_adjusted$CIL, adhd_fdr_w24_adjusted$CIH, adhd_fdr_w24_adjusted$p.value,adhd_fdr_w24_adjusted$FDR))
+Autism_w24_a<- data.frame(
+  Metabolites =asd_fdr_w24_adjusted$Metabolites,
+ Autism_w24_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_w24_adjusted$OR, asd_fdr_w24_adjusted$CIL, asd_fdr_w24_adjusted$CIH, asd_fdr_w24_adjusted$p.value,asd_fdr_w24_adjusted$FDR))
+```
+W1
+```{r}
+Significant_adhd_w1_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_w1_adj.csv",row.names=1)
+#ASD
+asd_fdr_w1_adjusted<-read.csv("~/Data/Result_table_fdr_asd_w1_adj.csv",row.names=1)
+adhd_fdr_w1_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_w1_adj.csv",row.names=1)
+
+Significant_asd_w1_adjusted<-read.csv("~/Data/Result_table_fdr_asd_w1_adj.csv",row.names=1)%>%filter(p.value<0.05)
+#NEUDEV
+Significant_neu_w1_adjusted<-read.csv("~/Data/Result_table_fdr_neu_dev_w1_adj.csv",row.names=1)%>%filter(p.value<0.05)
+
+neu_fdr_w1_adjusted<-read.csv("~/Data/Result_table_fdr_neu_dev_w1_adj.csv",row.names=1)
+
+w1_all_sig<-rbind(Significant_adhd_w1_adjusted,Significant_asd_w1_adjusted,Significant_neu_w1_adjusted)
+w1_all_sig_d<-w1_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+w1_all<-rbind(adhd_fdr_w1_adjusted,asd_fdr_w1_adjusted,neu_fdr_w1_adjusted)
+w1_all_d<-w1_all%>%distinct(Metabolites, .keep_all=T)
+
+NDD_w1_a<- data.frame(
+  Metabolites = neu_fdr_w1_adjusted$Metabolites,
+ NDD_w1_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_w1_adjusted$OR, neu_fdr_w1_adjusted$CIL, neu_fdr_w1_adjusted$CIH, neu_fdr_w1_adjusted$p.value,neu_fdr_w1_adjusted$FDR))
+ADHD_w1_a<- data.frame(
+  Metabolites = adhd_fdr_w1_adjusted$Metabolites,
+ ADHD_w1_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_w1_adjusted$OR, adhd_fdr_w1_adjusted$CIL, adhd_fdr_w1_adjusted$CIH, adhd_fdr_w1_adjusted$p.value,adhd_fdr_w1_adjusted$FDR))
+Autism_w1_a<- data.frame(
+  Metabolites =asd_fdr_w1_adjusted$Metabolites,
+ Autism_w1_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_w1_adjusted$OR, asd_fdr_w1_adjusted$CIL, asd_fdr_w1_adjusted$CIH, asd_fdr_w1_adjusted$p.value,asd_fdr_w1_adjusted$FDR))
+```
+
+
+6mth
+```{r}
+#ADHD
+Significant_adhd_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_6mth_adj.csv",row.names=1)%>%filter(p.value<0.05)
+
+adhd_fdr_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_6mth_adj.csv",row.names=1)
+#ASD
+asd_fdr_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_asd_6mth_adj.csv",row.names=1)
+Significant_asd_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_neu_6mth_adj.csv",row.names=1)%>%filter(p.value<0.05)
+#NEUDEV
+Significant_neu_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_neu_6mth_adj.csv",row.names=1)%>%filter(p.value<0.05)
+neu_fdr_6mth_adjusted<-read.csv("~/Data/Result_table_fdr_neu_6mth_adj.csv",row.names=1)
+
+mth6_all_sig<-rbind(Significant_adhd_6mth_adjusted,Significant_asd_6mth_adjusted,Significant_neu_6mth_adjusted)
+mth6_all_sig_d<-mth6_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+NDD_6mth_a<- data.frame(
+  Metabolites = neu_fdr_6mth_adjusted$Metabolites,
+ NDD_6mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_6mth_adjusted$OR, neu_fdr_6mth_adjusted$CIL, neu_fdr_6mth_adjusted$CIH, neu_fdr_6mth_adjusted$p.value,neu_fdr_6mth_adjusted$FDR))
+ADHD_6mth_a<- data.frame(
+  Metabolites = adhd_fdr_6mth_adjusted$Metabolites,
+ ADHD_6mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_6mth_adjusted$OR, adhd_fdr_6mth_adjusted$CIL, adhd_fdr_6mth_adjusted$CIH, adhd_fdr_6mth_adjusted$p.value,adhd_fdr_6mth_adjusted$FDR))
+Autism_6mth_a<- data.frame(
+  Metabolites =asd_fdr_6mth_adjusted$Metabolites,
+ Autism_6mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_6mth_adjusted$OR, asd_fdr_6mth_adjusted$CIL, asd_fdr_6mth_adjusted$CIH, asd_fdr_6mth_adjusted$p.value,asd_fdr_6mth_adjusted$FDR))
+```
+
+
+18mth
+```{r}
+#ADHD
+Significant_adhd_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_18mth_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+adhd_fdr_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_18mth_adj.csv",row.names=1)
+#ASD
+asd_fdr_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_asd_18mth_adj.csv",row.names=1)
+Significant_asd_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_asd_18mth_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+#NEUDEV
+Significant_neu_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_neu_18mth_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+neu_fdr_18mth_adjusted<-read.csv("~/Data/Result_table_fdr_neu_18mth_adj.csv",row.names=1)
+
+mth18_all_sig<-rbind(Significant_adhd_18mth_adjusted,Significant_asd_18mth_adjusted,Significant_neu_18mth_adjusted)
+mth18_all_sig_d<-mth18_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+NDD_18mth_a<- data.frame(
+  Metabolites = neu_fdr_18mth_adjusted$Metabolites,
+ NDD_18mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_18mth_adjusted$OR, neu_fdr_18mth_adjusted$CIL, neu_fdr_18mth_adjusted$CIH, neu_fdr_18mth_adjusted$p.value,neu_fdr_18mth_adjusted$FDR))
+ADHD_18mth_a<- data.frame(
+  Metabolites = adhd_fdr_18mth_adjusted$Metabolites,
+ ADHD_18mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_18mth_adjusted$OR, adhd_fdr_18mth_adjusted$CIL, adhd_fdr_18mth_adjusted$CIH, adhd_fdr_18mth_adjusted$p.value,adhd_fdr_18mth_adjusted$FDR))
+Autism_18mth_a<- data.frame(
+  Metabolites =asd_fdr_18mth_adjusted$Metabolites,
+ Autism_18mth_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_18mth_adjusted$OR, asd_fdr_18mth_adjusted$CIL, asd_fdr_18mth_adjusted$CIH, asd_fdr_18mth_adjusted$p.value,asd_fdr_18mth_adjusted$FDR))
+```
+
+6yr
+```{r}
+#ADHD
+Significant_adhd_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_6yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+adhd_fdr_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_6yr_adj.csv",row.names=1)
+#ASD
+asd_fdr_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_asd_6yr_adj.csv",row.names=1)
+Significant_asd_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_asd_6yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+#NEUDEV
+Significant_neu_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_neu_6yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+neu_fdr_6yr_adjusted<-read.csv("~/Data/Result_table_fdr_neu_6yr_adj.csv",row.names=1)
+
+yr6_all_sig<-rbind(Significant_adhd_6yr_adjusted,Significant_asd_6yr_adjusted,Significant_neu_6yr_adjusted)
+yr6_all_sig_d<-yr6_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+NDD_6yr_a<- data.frame(
+  Metabolites = neu_fdr_6yr_adjusted$Metabolites,
+ NDD_6yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_6yr_adjusted$OR, neu_fdr_6yr_adjusted$CIL, neu_fdr_6yr_adjusted$CIH, neu_fdr_6yr_adjusted$p.value,neu_fdr_6yr_adjusted$FDR))
+ADHD_6yr_a<- data.frame(
+  Metabolites = adhd_fdr_6yr_adjusted$Metabolites,
+ ADHD_6yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_6yr_adjusted$OR, adhd_fdr_6yr_adjusted$CIL, adhd_fdr_6yr_adjusted$CIH, adhd_fdr_6yr_adjusted$p.value,adhd_fdr_6yr_adjusted$FDR))
+Autism_6yr_a<- data.frame(
+  Metabolites =asd_fdr_6yr_adjusted$Metabolites,
+ Autism_6yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_6yr_adjusted$OR, asd_fdr_6yr_adjusted$CIL, asd_fdr_6yr_adjusted$CIH, asd_fdr_6yr_adjusted$p.value,asd_fdr_6yr_adjusted$FDR))
+
+```
+10yr
+```{r}
+#ADHD
+Significant_adhd_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_10yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+adhd_fdr_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_adhd_10yr_adj.csv",row.names=1)
+#ASD
+asd_fdr_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_asd_10yr_adj.csv",row.names=1)
+Significant_asd_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_asd_10yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+#NEUDEV
+Significant_neu_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_neu_10yr_adj.csv",row.names=1)%>%filter(p.value<=0.05)
+neu_fdr_10yr_adjusted<-read.csv("~/Data/Result_table_fdr_neu_10yr_adj.csv",row.names=1)
+
+yr10_all_sig<-rbind(Significant_adhd_10yr_adjusted,Significant_asd_10yr_adjusted,Significant_neu_10yr_adjusted)
+yr10_all_sig_d<-yr10_all_sig%>%distinct(Metabolites, .keep_all=T)
+
+NDD_10yr_a<- data.frame(
+  Metabolites = neu_fdr_10yr_adjusted$Metabolites,
+ NDD_10yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", neu_fdr_10yr_adjusted$OR, neu_fdr_10yr_adjusted$CIL, neu_fdr_10yr_adjusted$CIH, neu_fdr_10yr_adjusted$p.value,neu_fdr_10yr_adjusted$FDR))
+ADHD_10yr_a<- data.frame(
+  Metabolites = adhd_fdr_10yr_adjusted$Metabolites,
+ ADHD_10yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", adhd_fdr_10yr_adjusted$OR, adhd_fdr_10yr_adjusted$CIL, adhd_fdr_10yr_adjusted$CIH, adhd_fdr_10yr_adjusted$p.value,adhd_fdr_10yr_adjusted$FDR))
+Autism_10yr_a<- data.frame(
+  Metabolites =asd_fdr_10yr_adjusted$Metabolites,
+ Autism_10yr_adjusted = sprintf("%.2f [%.2f - %.2f] (P = %.3f, P.fdr=%.2f)", asd_fdr_10yr_adjusted$OR, asd_fdr_10yr_adjusted$CIL, asd_fdr_10yr_adjusted$CIH, asd_fdr_10yr_adjusted$p.value,asd_fdr_10yr_adjusted$FDR))
+```
+
+```{r}
+# List of cell names to filter
+cells_to_extract <- c("X182", "X1648", "X100001950", "X100021208", "X100005389", "X100020360")#"X100021208" X100005389 "X100020360"
+
+# Filtering each dataframe
+extracted_df1 <- adhd_fdr_10yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df2 <- adhd_fdr_6yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df3 <- adhd_fdr_18mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df4 <- adhd_fdr_6mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df5 <- adhd_fdr_w24_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df6 <- adhd_fdr_w1_adjusted %>% filter(Metabolites %in% cells_to_extract)
+combined_dataset_adhd <- bind_rows(
+  mutate(extracted_df1, TP = "10yr"),
+  mutate(extracted_df2, TP = "6yr"),
+  mutate(extracted_df3, TP = "18mth"),
+  mutate(extracted_df4, TP = "6mth"),
+  mutate(extracted_df5, TP = "w24"),
+  mutate(extracted_df6, TP = "w1")
+)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+
+combined_dataset_adhd_log<- combined_dataset_adhd %>% mutate(across(c("OR":"CIH"), logtransform))
+combined_dataset_adhd_log<-combined_dataset_adhd_log%>%mutate(Group="ADHD")
+# Plotting
+# Adjust the width for dodging (positioning)
+# Plotting
+# Adjust the width for dodging (positioning)
+dodge_width <- 0.5  # Adjust as needed
+
+# Offset for text to move it further right
+text_offset <- 0.4  # Adjust this value based on your data's scale
+method_order <- c("w24","w1", "6mth", "18mth","6yr", "10yr" )
+
+#NDD
+extracted_df1 <- neu_fdr_10yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df2 <- neu_fdr_6yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df3 <- neu_fdr_18mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df4 <- neu_fdr_6mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df5 <- neu_fdr_w24_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df6 <- neu_fdr_w1_adjusted %>% filter(Metabolites %in% cells_to_extract)
+
+combined_dataset_neu_dev <- bind_rows(
+  mutate(extracted_df1, TP = "10yr"),
+  mutate(extracted_df2, TP = "6yr"),
+  mutate(extracted_df3, TP = "18mth"),
+  mutate(extracted_df4, TP = "6mth"),
+  mutate(extracted_df5, TP = "w24"),
+   mutate(extracted_df6, TP = "w1")
+)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+
+combined_dataset_neu_dev_log<- combined_dataset_neu_dev %>% mutate(across(c("OR":"CIH"), logtransform))
+combined_dataset_neu_dev_log<-combined_dataset_neu_dev_log%>%mutate(Group="NDD")
+# Plotting
+# Adjust the width for dodging (positioning)
+# Plotting
+# Adjust the width for dodging (positioning)
+dodge_width <- 0.5  # Adjust as needed
+
+# Offset for text to move it further right
+text_offset <- 0.4  # Adjust this value based on your data's scale
+method_order <- c("w24", "6mth", "18mth","6yr", "10yr" )
+combined_dataset_neu_dev_log1<- combined_dataset_neu_dev_log %>%
+  mutate(Method = factor(Group, levels = method_order))
+
+
+#ASD
+extracted_df1 <- asd_fdr_10yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df2 <- asd_fdr_6yr_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df3 <- asd_fdr_18mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df4 <- asd_fdr_6mth_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df5 <- asd_fdr_w24_adjusted %>% filter(Metabolites %in% cells_to_extract)
+extracted_df6 <- asd_fdr_w1_adjusted %>% filter(Metabolites %in% cells_to_extract)
+combined_dataset_asd <- bind_rows(
+  mutate(extracted_df1, TP = "10yr"),
+  mutate(extracted_df2, TP = "6yr"),
+  mutate(extracted_df3, TP = "18mth"),
+  mutate(extracted_df4, TP = "6mth"),
+  mutate(extracted_df5, TP = "w24"),
+  mutate(extracted_df6, TP = "w1")
+)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+
+combined_dataset_asd_log<- combined_dataset_asd %>% mutate(across(c("OR":"CIH"), logtransform))
+combined_dataset_asd_log<-combined_dataset_asd_log%>%mutate(Group="Autism")
+# Plotting
+# Adjust the width for dodging (positioning)
+# Plotting
+# Adjust the width for dodging (positioning)
+dodge_width <- 0.5  # Adjust as needed
+
+# Offset for text to move it further right
+text_offset <- 0.1  # Adjust this value based on your data's scale
+method_order <- c("w24","w1","6mth", "18mth","6yr", "10yr" )
+
+
+combined_dataset_all <- bind_rows(
+  mutate(combined_dataset_neu_dev, Group = "Any NDDs"),
+  mutate(combined_dataset_adhd, Group = "ADHD"),
+  mutate(combined_dataset_asd, Group = "Autism")
+)
+#combined_dataset_all<-filter(combined_dataset_all,TP!="w1")
+str(combined_dataset_all)
+colnames(combined_dataset_all)[5]<-"p.value"
+# Plotting
+# Define the desired order for TP
+method_order <- c("w24", "w1", "6mth", "18mth", "6yr", "10yr")
+#method_order <- c("w24", "6mth", "18mth", "6yr", "10yr")
+# Convert TP to factor with the desired order
+combined_dataset_all$TP <- factor(combined_dataset_all$TP, levels = method_order)
+
+# Plotting with adjusted order of TP 折线
+# Define the desired order for TP
+# Plotting with adjusted order of TP and smooth lines
+ggplot(combined_dataset_all, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+  geom_smooth(aes(group = interaction(CHEMICAL_NAME, Group)), method = "loess", size = 1.5) +
+  geom_point(aes(group = interaction(CHEMICAL_NAME, Group)), stat = "summary", fun.y = "mean", size = 3) +
+  geom_hline(yintercept = 1, linetype = "longdash") +
+  theme_bw(base_size = 17) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "right") +
+  xlab("") +
+  ylab("Odd Ratio (OR)") +
+  ggtitle(" ") +
+  facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+  scale_y_continuous(limits = c(0.3, 3.5)) + # Setting y-axis limits
+  scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) + # "#2A3132", "#763626", "#90AFC5"
+  guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group"))
+############Figure 3
+# Plotting with adjusted order of TP and smooth lines
+ggplot(combined_dataset_all, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+  geom_smooth(aes(group = interaction(CHEMICAL_NAME, Group)), method = "loess", size = 1.5) +
+  geom_point(aes(group = interaction(CHEMICAL_NAME, Group)), stat = "summary", fun.y = "mean", size = 3) +
+  geom_hline(yintercept = 1, linetype = "longdash") +
+  theme_bw(base_size = 17) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "right") +
+  xlab("") +
+  ylab("Odd Ratio (OR)") +
+  ggtitle(" ") +
+  facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+  scale_y_continuous(limits = c(0.3, 3.2)) + # Setting y-axis limits
+  scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) + # "#2A3132", "#763626", "#90AFC5"
+  guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group"))
+
+#ADD CI
+
+ggplot(combined_dataset_all, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+    geom_smooth(aes(group = interaction(CHEMICAL_NAME, Group)), method = "loess", size = 1.5) +
+    geom_point(aes(group = interaction(CHEMICAL_NAME, Group)), stat = "summary", fun.y = "mean", size = 3) +
+    geom_errorbar(aes(ymin = CIL, ymax = CIH, group = interaction(CHEMICAL_NAME, Group)), width = 0.2) +
+    geom_hline(yintercept = 1, linetype = "longdash") +
+    theme_bw(base_size = 17) +
+    theme(axis.text.x = element_text(size = 15),
+          axis.text.y = element_text(size = 15),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          legend.position = "right") +
+    xlab("") +
+    ylab("Odds Ratio (OR)") +
+    ggtitle(" ") +
+    facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+    scale_y_continuous(limits = c(0.3, 3.2)) +
+    scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) +
+    guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group"))
+
+```
+
+```{r}
+# Filter points with p.value < 0.05 to annotate with "*"
+significant_points <- combined_dataset_all[combined_dataset_all$p.value < 0.05, ]
+
+
+# Plotting with adjusted order of TP and smooth lines
+ggplot(combined_dataset_all, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+  geom_smooth(aes(group = interaction(Metabolites, Group)), method = "loess", size = 1.5) +
+  geom_point(aes(group = interaction(Metabolites, Group)), stat = "summary", fun.y = "mean", size = 3) +
+  geom_hline(yintercept = 1, linetype = "longdash") +
+  theme_bw(base_size = 17) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "right") +
+  xlab("") +
+  ylab("Odd Ratio (OR)") +
+  ggtitle(" ") +
+  facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+  scale_y_continuous(limits = c(0.3, 3.2)) + # Setting y-axis limits
+  scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) + # Setting color palette
+  guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group")) +
+  geom_text(data = significant_points, aes(label = "*", color = Group), vjust = -0.5, size = 5) # Aligning "*" color with Group
+
+
+# Create a vector of the metabolite names you want to keep
+metabolites_to_keep <- c("X182", "X100005389", "X100020360")
+
+# Filter the dataframe to only keep rows where 'Metabolites' column matches one of the names
+filtered_df <- combined_dataset_all %>%
+  filter(Metabolites %in% metabolites_to_keep)
+significant_points <- filtered_df[filtered_df$p.value < 0.05, ]
+ggplot(filtered_df, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+  geom_smooth(aes(group = interaction(Metabolites, Group)), method = "loess", size = 1.5) +
+  geom_point(aes(group = interaction(Metabolites, Group)), stat = "summary", fun.y = "mean", size = 3) +
+  geom_hline(yintercept = 1, linetype = "longdash") +
+  theme_bw(base_size = 17) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "right") +
+  xlab("") +
+  ylab("Odd Ratio (OR)") +
+  ggtitle(" ") +
+  facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+  #scale_y_continuous(limits = c(0.3, 3.5)) + # Setting y-axis limits
+  scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) + # Setting color palette
+  guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group")) +
+  geom_text(data = significant_points, aes(label = "*", color = Group), vjust = -0.5, size = 5) # Aligning "*" color with Group
+
+```
+ 3 metabolites
+```{r}
+position_dodge_width <- 0.7
+position_dodge_width1 <- 0.5
+filtered_df <- combined_dataset_all %>%
+  filter(Metabolites %in% metabolites_to_keep)
+significant_points1 <- filtered_df[filtered_df$p.value < 0.05, ]
+ggplot(filtered_df, aes(x = TP, y = OR, color = Group, linetype = Group)) +
+  geom_point(aes(group = interaction(Metabolites, Group)), 
+             stat = "summary", fun.y = "mean", size = 3.5, 
+             position = position_dodge(width = position_dodge_width)) +
+  geom_errorbar(aes(ymin = CIL, ymax = CIH, group = interaction(CHEMICAL_NAME, Group)), 
+                width = 0.2, size = 1, linetype = "solid", 
+                position = position_dodge(width = position_dodge_width)) +
+  geom_hline(yintercept = 1, linetype = "solid") +
+  theme_bw(base_size = 17) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "right") +
+  xlab("") +
+  ylab("Odd Ratio (OR)") +
+  ggtitle(" ") +
+  facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+  # scale_y_continuous(limits = c(0.3, 3.5)) + # Optional y-axis limits
+  scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) + # Setting color palette
+  guides(color = guide_legend(title = "Group"), linetype = guide_legend(title = "Group")) +
+  geom_text(data = significant_points, 
+            aes(x = TP, y = CIH, label = "*", color = Group), # Add offset for placement
+            position = position_dodge(width = position_dodge_width1),
+            vjust = 0.2, hjust =0.1, size = 5) # Adjust vjust for proximity
+
+```
+
+WITH CI
+```{r}
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+
+combined_dataset_all_log<- combined_dataset_all %>% mutate(across(c("OR":"CIH"), logtransform))
+#ggplot(combined_dataset_all, aes(x = TP, y = OR, color = Group, group = Group)) +
+ggplot(combined_dataset_all_log, aes(x = TP, y = OR, color = Group, group = Group)) +
+    geom_point(size = 4, aes(shape = Group), position = position_dodge(dodge_width)) +
+    # geom_line(aes(linetype = Group), position = position_dodge(dodge_width), size = 1) +
+    geom_errorbar(aes(ymin = CIL, ymax = CIH), size=1,width = 0.1, position = position_dodge(dodge_width)) +
+    geom_hline(yintercept =0, linetype = "dashed", color = "black", size = 0.5)  +
+ # geom_text_repel(aes(label = PValue, y = CIH + 0.4), 
+   #               position = position_dodge(dodge_width),
+   #               vjust = 0.5,
+    #              size = 3.5,
+    #              direction = 'y',
+     #             box.padding = unit(0.35, "lines")) +
+    labs(
+        title = " ",
+        x = "Time Point",
+        y = "log(OR)",
+        caption = ""
+    )  +
+  geom_smooth(aes(group = Group), method = "loess", se = FALSE, size = 0.5, linetype = "dashed") +  
+    theme_minimal() +
+    facet_wrap(~ CHEMICAL_NAME, scales = "free_y") +
+    theme(
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "black"),
+        axis.line.x = element_line(color = "black", size = 0.5),
+        axis.line.y = element_line(color = "black", size = 0.5),
+        text = element_text(size = 20),
+        axis.text.x = element_text(angle = 45, hjust = 1, size=17),
+        plot.title = element_text(hjust = 0.5, size = 17),
+        plot.caption = element_text(hjust = 0.5, size = 16)
+    ) +
+    scale_y_continuous(limits = c(-1.8, 2.2)) +
+    scale_color_manual(values = c("#375E97", "#A43820", "#FFBB00")) +  # Assigning custom colors to the groups
+    scale_shape_manual(values = c(16, 17, 18)) 
+#output Figure 5
+```
+
+
