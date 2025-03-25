@@ -1,7 +1,7 @@
 ---
 title: "Pathway_Enrichment"
-author: "Min Kim"
-date: "4/28/2022"
+author: "Tingting Wang"
+date: "2/28/2025"
 output: html_document
 ---
 
@@ -9,6 +9,10 @@ output: html_document
 knitr::opts_chunk$set(echo = F)
 library(tidyverse)
 library(readxl)
+library(dplyr)
+library(ggsankey)
+library(tidyverse)
+library(cols4all)
 ```
 
 
@@ -18,18 +22,12 @@ load("/Data/top_100_merge_table_NDD.Rdata")
 load("/Data/top_100_merge_table_ADHD.Rdata")
 ```
 
-SPLS
+Output from SPLS model
 # Import excel sheet containing all metabolite information such as name and metabolic pathway (those metabolites with NO annotation are removed)
 ```{r}
 ##load the ID and names of all metabolites
 metabolite.info <- read_xlsx("~/Data/Chemical_Annotation_Common.xlsx") %>%
-  dplyr::select(CHEM_ID,PATHWAY_SORTORDER, CHEMICAL_NAME, SUB_PATHWAY, SUPER_PATHWAY)%>%
- filter(!grepl("XX", PATHWAY_SORTORDER))
-# Add "X" to the start of each cell in the specific column
-metabolite.info$CHEM_ID <- paste("X", metabolite.info$CHEM_ID, sep = "")
-
-# Remove unknown metabolites where CHEM_ID contains "X9999" 
-metabolite.info <- metabolite.info[!grepl("X9999", metabolite.info$CHEM_ID), ]
+  dplyr::select(CHEM_ID,PATHWAY_SORTORDER, CHEMICAL_NAME, SUB_PATHWAY, SUPER_PATHWAY)%
 
 # Subset metabolite.info where only the selected metabolites are included
 
@@ -140,12 +138,6 @@ g +
 
 NDD
 ```{r}
-# devtools::install_github("davidsjoberg/ggsankey")
-# devtools::install_local("ggsankey-main.zip")
-library(dplyr)
-library(ggsankey)
-library(tidyverse)
-library(cols4all)
 
 # Assume df2 is your second data frame
 # This creates a new data frame with 'SUB_PATHWAY' and concatenated 'CHEMICAL_NAME'
@@ -296,7 +288,4 @@ p <- ggdraw() +
 p
 
 ```
-
-
-
 
