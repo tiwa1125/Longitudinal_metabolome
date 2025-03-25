@@ -1,1 +1,1150 @@
+---
+title: "lg"
+author: "Tingting"
+date: "2024-03-05"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggforce)
+library(broom)
+library(ggstance)
+library(readxl)
+library(ggpubr)
+library(janitor)
+library(rio)
+library(tidyr)
+library(mlbench)
+library(doMC)
+library(tidyverse)
+library(ggplot2)
+library(forcats)
+library(dplyr)
+library(openxlsx)
+library(ggrepel)
+```
+
+## R Markdown
+
+```{r cars}
+load("/Data/copsych_clinical.Rdata")
+load("/Data/copsych_predictors.Rdata")
+load("~/Data//covariat_all_18.Rdata")
+load("~/Data//diag_all_name.Rdata")
+
+all_annotation<-read.xlsx("~/Data/Chemical_Annotation_Common.xlsx")
+# Add "X" to the start of each cell in the specific column
+all_annotation$CHEM_ID <- paste("X", all_annotation$CHEM_ID, sep = "")
+
+longti_data<-read.xlsx("~/Data/all_anchor_norm_metabolome.xlsx")
+
+longti_data_1<-longti_data%>%filter(TP%in% c("Mor_w24","Mor_w1","6mth", "18mth", "6yr","10yr"))
+
+
+filtered_df_diag0<-left_join(diag_all_name[,c(1,3,5,8)],longti_data_2, by="ABCNO")
+
+w24<-filtered_df_diag0%>%filter(TP=="Mor_w24")
+
+mth6<-filtered_df_diag0%>%filter(TP=="6mth")
+mth18<-filtered_df_diag0%>%filter(TP=="18mth")
+yr6<-filtered_df_diag0%>%filter(TP=="6yr")
+w1<-filtered_df_diag0%>%filter(TP=="Mor_w1")
+yr10<-filtered_df_diag0%>%filter(TP=="10yr")
+
+
+
+load("~/bmi/BMI18mth.Rdata")
+load("~/bmi/BMI6mth.Rdata")
+load("~/bmi/BMI6yr.Rdata")
+load("~/bmi/BMI10yr.Rdata")
+load("~/bmi/BMI_overweight_6mth_10yr.Rdata")
+Birth<- import('/Birth/ABC0016_Delivery.xlsx',sheet=3) %>% 
+  clean_names() 
+Birth<-Birth%>%
+  mutate(Birth_way = case_when(Birth$delivery %in% c("Normal") ~ "0",
+                           Birth$delivery %in% c("Planned sectio", "Acute sectio") ~ "1"))%>% dplyr::select(abcno, Birth_way)
+fish_oil<- read_xlsx('~/Data/fishoil and VD intervention/ABC0058_Fishoil.xlsx', sheet = 'Data') 
+VD<-read.csv('~/Data/fishoil and VD intervention/D-vitamin.csv') 
+
+n_w24<-list(covariat_all_18,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil), w24[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+
+n_18m<-list(covariat_all_18,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil),BMI18mth%>%dplyr::select(1,2),mth18[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+
+n_6m<-list(covariat_all_18,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil),BMI6mth%>%dplyr::select(1,2),mth6[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+
+n_6yr<-list(covariat_all_18,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil),BMI6yr%>%dplyr::select(1,2),yr6[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+
+n_10yr<-list(covariat_all_18,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil),BMI10yr%>%dplyr::select(1,2),yr10[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+
+n_w1<-list(covariat_all_18,Birth,VD%>%dplyr::select(ABCNO, VD), fish_oil%>%dplyr::select(ABCNO,fish_oil),w1[,c(1,7:689)])%>%reduce(left_join,by="ABCNO")
+```
+
+w24 NDD
+```{r}
+#W24
+hold_w24<-n_w24
+
+Result_table<- matrix(data=NA, nrow=683, ncol=5)
+colnames(Result_table) <- c("Metabolites","OR", "CIL","CIH",
+                            "p.value")
+Result_table <- as.data.frame(Result_table)
+j<- 1
+for (i in 21:length(names(hold_w24)))
+{
+  my.formula <- paste("neu_dev")
+  x.var <- paste(names(hold_w24)[i],"+ sex+
+                             motherage + mother_smoking +ab_preg_yn + preeclampsia3rdtrimester +mother_bmi +ga +birthweight+ maternal_education_at1w+paternal_education_at1w+familyincome_at1week+alcohol_all+diabetes_all" )
+  my.glm.formula <- as.formula(paste0(my.formula," ~ ", x.var))
+  glm_model <- glm(my.glm.formula, na.action = na.omit, data=hold_w24,family = "binomial")
+  print(tidy(glm_model))
+  Result_table[j,1] <- names(hold_w24)[i]
+  Result_table[j,2] <- round(exp(coef(glm_model)), 2)[2]#exp
+  Result_table[j,3] <- round(exp(confint(glm_model)), 2)[2,1]#exp
+  Result_table[j,4] <- round(exp(confint(glm_model)), 2)[2,2]#
+  Result_table[j,5] <- round(tidy(glm_model)$p.value,4)[2]
+  j <- j+1
+}
+################################################################
+
+################################################################
+pathway<-all_annotation
+
+colnames(pathway)[1]<-"Metabolites"
+colnames(pathway)[2]<-"Super_pathway"
+Result_table_name<-left_join(Result_table, pathway
+                        %>% dplyr::select(Metabolites,CHEMICAL_NAME,Super_pathway), by ="Metabolites")##
+
+names(Result_table_name)
+Result_table_fdr_neu_w24<-Result_table_name%>%
+  mutate(FDR= p.adjust(Result_table_name$p.value,method="fdr"))
+
+
+write.csv(Result_table_fdr_neu_w24,file="~/Result_table_fdr_NDD_w24_adj.csv")
+
+Result_table_Significant_neu_w24 <- subset(Result_table_fdr_neu_w24,p.value<= 0.05)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+Result_table_Significant_neu_w24_log <- Result_table_Significant_neu_w24 %>% mutate(across(c("OR":"CIH"), logtransform))nificant_neu_w24_log<-Result_table_Significant_neu_w24_log[with(Result_table_Significant_neu_w24_log,order(FDR)),]
+
+#######plot the data
+plot_NDD_w24_adj <- Result_table_Significant_neu_w24_log %>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, color = "grey40"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 4, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0,  
+    direction = "y"  
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(size = 10,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "W24_Any NDDs-adjusted (54)",
+    color = "Pathway"
+  )
+
+plot_NDD_w24_adj
+
+Result_table_Significant_neu_w24_log_20 <- Result_table_Significant_neu_w24_log %>%
+ arrange(desc(abs(OR))) %>%
+  slice(1:20)
+
+plot_NDD_w24_adj_20 <- Result_table_Significant_neu_w24_log_20%>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, size = 0.8,color = "grey50"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 5, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0, 
+    direction = "y"  
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.text.y = element_text(size = 14,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "W24-Any NDDs-adjusted (20/54)",
+    color = "Pathway"
+  )
+plot_NDD_w24_adj_20
+
+
+```
+W24-ADHD
+```{r}
+Result_table<- matrix(data=NA, nrow=683, ncol=5)
+colnames(Result_table) <- c("Metabolites","OR", "CIL","CIH",
+                            "p.value")
+Result_table <- as.data.frame(Result_table)
+j<- 1
+for (i in 21:length(names(hold_w24)))
+{
+  my.formula <- paste("adhd")
+  x.var <- paste(names(hold_w24)[i],"+ sex+
+                             motherage + mother_smoking +ab_preg_yn + preeclampsia3rdtrimester +mother_bmi +ga +birthweight +maternal_education_at1w+paternal_education_at1w+familyincome_at1week+alcohol_all+diabetes_all" )
+  my.glm.formula <- as.formula(paste0(my.formula," ~ ", x.var))
+  glm_model <- glm(my.glm.formula, na.action = na.omit, data=hold_w24,family = "binomial")
+  print(tidy(glm_model))
+  Result_table[j,1] <- names(hold_w24)[i]
+  Result_table[j,2] <- round(exp(coef(glm_model)), 2)[2]#exp
+  Result_table[j,3] <- round(exp(confint(glm_model)), 2)[2,1]#exp
+  Result_table[j,4] <- round(exp(confint(glm_model)), 2)[2,2]#
+  Result_table[j,5] <- round(tidy(glm_model)$p.value,4)[2]
+  j <- j+1
+}
+
+################################################################
+pathway<-all_annotation
+colnames(pathway)[1]<-"Metabolites"
+colnames(pathway)[2]<-"Super_pathway"
+Result_table_name<-left_join(Result_table, pathway
+                        %>% dplyr::select(Metabolites,CHEMICAL_NAME,Super_pathway), by ="Metabolites")
+
+names(Result_table_name)
+Result_table_fdr_adhd_w24<-Result_table_name%>%
+  mutate(FDR= p.adjust(Result_table_name$p.value,method="fdr"))
+
+
+write.csv(Result_table_fdr_adhd_w24,file="~/Result_table_fdr_adhd_w24_adj.csv")
+
+Result_table_Significant_adhd_w24 <- subset(Result_table_fdr_adhd_w24,p.value<= 0.05)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+Result_table_Significant_adhd_w24_log <- Result_table_Significant_adhd_w24 %>% mutate(across(c("OR":"CIH"), logtransform))
+
+Result_table_Significant_adhd_w24_log<-Result_table_Significant_adhd_w24_log[with(Result_table_Significant_adhd_w24_log,order(FDR)),]
+
+#######plot the data
+
+plot_adhd_W24 <- Result_table_Significant_adhd_w24_log %>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, color = "grey40"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 4, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0,  
+    direction = "y"  
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(size = 10,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "Week24-ADHD-adjusted (39)",
+    color = "Pathway"
+  )
+
+plot_adhd_W24
+#####top20
+Result_table_Significant_adhd_w24_log_20 <- Result_table_Significant_adhd_w24_log %>%
+ arrange(desc(abs(OR))) %>%
+  slice(1:20)
+
+plot_adhd_w24_adj_20 <- Result_table_Significant_adhd_w24_log_20%>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, size = 0.8,color = "grey50"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 5, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0,  
+    direction = "y" 
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.text.y = element_text(size = 14,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "W24-ADHD-adjusted (20/39)",
+    color = "Pathway"
+  )
+plot_adhd_w24_adj_20
+
+```
+
+W24 ASD
+```{r}
+Result_table<- matrix(data=NA, nrow=683, ncol=5)
+colnames(Result_table) <- c("Metabolites","OR", "CIL","CIH",
+                            "p.value")
+Result_table <- as.data.frame(Result_table)
+j<- 1
+for (i in 21:length(names(hold_w24)))
+{
+  my.formula <- paste("asd")
+  x.var <- paste(names(hold_w24)[i],"+ sex+
+                             motherage + mother_smoking +ab_preg_yn + preeclampsia3rdtrimester +mother_bmi +ga +birthweight +maternal_education_at1w+paternal_education_at1w+familyincome_at1week+alcohol_all+diabetes_all" )
+  
+  my.glm.formula <- as.formula(paste0(my.formula," ~ ", x.var))
+  glm_model <- glm(my.glm.formula, na.action = na.omit,data=hold_w24,family = "binomial")
+  print(tidy(glm_model))
+  Result_table[j,1] <- names(hold_w24)[i]
+  Result_table[j,2] <- round(exp(coef(glm_model)), 2)[2]
+  Result_table[j,3] <- round(exp(confint(glm_model)), 2)[2,1]
+  Result_table[j,4] <- round(exp(confint(glm_model)), 2)[2,2]#
+  Result_table[j,5] <- round(tidy(glm_model)$p.value,4)[2]
+  j <- j+1
+}
+################################################################
+Result_table_name<-left_join(Result_table, pathway
+                        %>% dplyr::select(Metabolites,CHEMICAL_NAME,Super_pathway), by ="Metabolites")##
+names(Result_table_name)
+Result_table_fdr_asd_w24<-Result_table_name%>%
+  mutate(FDR= p.adjust(Result_table_name$p.value,method="fdr"))
+
+
+write.csv(Result_table_fdr_asd_w24,file="~/Result_table_fdr_asd_w24_adj.csv")
+
+Result_table_Significant_asd_w24 <- subset(Result_table_fdr_asd_w24,p.value<= 0.05)
+logtransform <- function(x, na.rm = FALSE) (x %>% log())
+Result_table_Significant_asd_w24_log <- Result_table_Significant_asd_w24 %>% mutate(across(c("OR":"CIH"), logtransform))
+
+Result_table_Significant_asd_w24_log<-Result_table_Significant_asd_w24_log[with(Result_table_Significant_asd_w24_log,order(FDR)),]
+
+#######plot the data
+plot_asd_w24_adj <- Result_table_Significant_asd_w24_log %>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, color = "grey40"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 4, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0,  
+    direction = "y"  
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(size = 10,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "Week24-Autism -adjusted (32)",
+    color = "Pathway"
+  )
+
+plot_asd_w24_adj
+#top20
+Result_table_Significant_asd_w24_log_20 <- Result_table_Significant_asd_w24_log %>%
+ arrange(desc(abs(OR))) %>%
+  slice(1:20)
+
+plot_asd_w24_adj_20 <- Result_table_Significant_asd_w24_log_20%>%
+  group_by(Super_pathway) %>%
+  mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+  ungroup() %>%
+  ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+  geom_errorbar(
+    aes(xmin = CIL, xmax = CIH), width = 0.2, size = 0.8,color = "grey50"
+  ) +  # Error bars first
+  geom_point(size = 3) +  # Points on top
+  geom_text_repel(
+    aes(label = if_else(FDR<0.05, "**", if_else(p.value<0.05, "*", ""))),
+    box.padding = 0.15,  # Minimally pad the text box to keep text close
+    point.padding = 0.05,  # Minimize padding from the point to avoid large gaps
+    size = 5, segment.color = 'grey50',
+    nudge_x = 0.15,  
+    nudge_y = 0, 
+    direction = "y"  
+  ) +
+  geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+  scale_color_brewer(palette = "Paired") +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.text.y = element_text(size = 14,color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    y = "", x = "log(OR)", title = "W24-Autism-adjusted (20/32)",
+    color = "Pathway"
+  )
+plot_asd_w24_adj_20
+```
+combine
+
+```{r}
+
+all_super_pathways <- unique(c(Result_table_Significant_adhd_w24_log_20$Super_pathway,
+  Result_table_Significant_asd_w24_log_20$Super_pathway,
+  Result_table_Significant_neu_w24_log_20$Super_pathway,
+  Result_table_Significant_adhd_18mth_log_20$Super_pathway,
+  Result_table_Significant_asd_18mth_log_20$Super_pathway,
+  Result_table_Significant_neu_18mth_log_20$Super_pathway
+))
+# Create a unified color scale
+color_scale <- scale_color_manual(values = setNames(brewer.pal(n = length(all_super_pathways), name = "Paired"), all_super_pathways))
+
+plot_adhd_w24 <- Result_table_Significant_adhd_w24_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week24-ADHD-adjusted (20/39)",
+        color = "Pathway"
+    )
+
+plot_asd_w24 <- Result_table_Significant_asd_w24_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week24-Autism-adjusted (20/32)",
+        color = "Pathway"
+    )
+
+# Create the second plot
+plot_NDD_w24 <- Result_table_Significant_neu_w24_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week24_Any NDDs-adjusted (20/54)",
+        color = "Pathway"
+    )
+# 
+plot_adhd_18mth <- Result_table_Significant_adhd_18mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "18 months-ADHD-adjusted (20/30)",
+        color = "Pathway"
+    )
+
+plot_asd_18mth <- Result_table_Significant_asd_18mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "18 months-Autism-adjusted (20/56)",
+        color = "Pathway"
+    )
+
+# Create the second plot
+plot_NDD_18mth <- Result_table_Significant_neu_18mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "18 months-Any NDDs-adjusted (20/27)",
+        color = "Pathway"
+    )
+plot_NDD_18mth
+
+# Apply minimal theme, remove grid lines, and set y-axis text color to black for each plot
+plot_NDD_w24 <- plot_NDD_w24 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_w24 <- plot_adhd_w24 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_w24 <- plot_asd_w24 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_NDD_18mth <- plot_NDD_18mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_18mth <- plot_adhd_18mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_18mth <- plot_asd_18mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+
+# Extract the legend from one of the plots
+legend <- get_legend(plot_NDD_w24 + theme(legend.position = "right"))
+library(cowplot)
+# Combine the plots without legends
+combined_plots <- plot_grid(
+  plot_NDD_w24 + theme(legend.position = "none"),
+  plot_adhd_w24 + theme(legend.position = "none"),
+  plot_asd_w24 + theme(legend.position = "none"),
+  plot_NDD_18mth + theme(legend.position = "none"),
+  plot_adhd_18mth + theme(legend.position = "none"),
+  plot_asd_18mth + theme(legend.position = "none"),
+  ncol = 3,
+  labels = c("a", "b", "c", "d", "e", "f"),
+  label_x = 0.15,  # Adjust horizontal position of labels (move more toward the middle)
+  label_y = 0.95,  # Adjust vertical position of labels (move slightly down)
+  hjust = -0.2,    # Adjust horizontal justification of labels slightly
+  label_size = 14  # Font size for labels
+)
+
+# Add the legend to the top-right side of the combined plot
+combined_plot4 <- plot_grid(
+  combined_plots, 
+  legend, 
+  ncol = 2,                  # Arrange combined plots and legend side by side
+  rel_widths = c(4, 1)       # Adjust relative widths to position the legend on the top right
+)
+
+# Display the combined plot
+combined_plot4
+
+```
+
+```{r}
+combined_plot4 <- ggarrange(plot_NDD_w24_adj_20,
+plot_adhd_w24_adj_20,
+ plot_asd_w24_adj_20,
+  plot_neu_18mth_adj_20,
+plot_adhd_18mth_adj_20,
+ plot_asd_18mth_adj_20,
+  ncol = 3, nrow = 2,
+  align = "hv",             # Align both horizontal and vertical axes
+  common.legend = TRUE,     # Share the legend among plots
+  legend = "right",         # Position the legend on the right side
+  labels = c("a", "b","c","d", "e","f"), # Labels for #, "d","e","f","g","h","i"
+  label.x = 0.2,            # Adjust horizontal position of labels
+  label.y = 1.0,            # Adjust vertical position of labels
+  font.label = list(size = 14, face = "bold") # Font size and style for labels
+)
+
+# Print the combined plot
+print(combined_plot4)
+# Remove grid lines from each plot
+plot_NDD_w24_adj_20 <- plot_NDD_w24_adj_20 + theme(panel.grid = element_blank())
+plot_adhd_w24_adj_20 <- plot_adhd_w24_adj_20 + theme(panel.grid = element_blank())
+plot_asd_w24_adj_20 <- plot_asd_w24_adj_20 + theme(panel.grid = element_blank())
+plot_neu_18mth_adj_20 <- plot_neu_18mth_adj_20 + theme(panel.grid = element_blank())
+plot_adhd_18mth_adj_20 <- plot_adhd_18mth_adj_20 + theme(panel.grid = element_blank())
+plot_asd_18mth_adj_20 <- plot_asd_18mth_adj_20 + theme(panel.grid = element_blank())
+
+# Combine the plots with adjusted settings
+combined_plot4 <- ggarrange(
+  plot_NDD_w24_adj_20,
+  plot_adhd_w24_adj_20,
+  plot_asd_w24_adj_20,
+  plot_neu_18mth_adj_20,
+  plot_adhd_18mth_adj_20,
+  plot_asd_18mth_adj_20,
+  ncol = 3, nrow = 2,
+  align = "hv",             # Align both horizontal and vertical axes
+  common.legend = TRUE,     # Share the legend among plots
+  legend = "right",         # Position the legend on the right side
+  labels = c("a", "b", "c", "d", "e", "f"), # Labels for plots
+  label.x = 0.2,            # Adjust horizontal position of labels
+  label.y = 1.0,            # Adjust vertical position of labels
+  font.label = list(size = 14, face = "bold") # Font size and style for labels
+)
+
+# Display the combined plot
+combined_plot4
+
+```
+##############################
+```{r}
+all_super_pathways1 <- unique(c(Result_table_Significant_adhd_w1_log_20$Super_pathway,
+  Result_table_Significant_asd_w1_log_20$Super_pathway,
+ Result_table_Significant_neu_w1_log_20$Super_pathway,
+  Result_table_Significant_adhd_6mth_log_20$Super_pathway,
+  Result_table_Significant_asd_6mth_log_20$Super_pathway,
+  Result_table_Significant_neu_6mth_log_20$Super_pathway,
+   Result_table_Significant_adhd_6yr_log_20$Super_pathway,
+  Result_table_Significant_asd_6yr_log_20$Super_pathway,
+  Result_table_Significant_neu_6yr_log_20$Super_pathway,
+  Result_table_Significant_adhd_10yr_log_20$Super_pathway,
+  Result_table_Significant_asd_10yr_log_20$Super_pathway,
+  Result_table_Significant_neu_10yr_log_20$Super_pathway
+))
+# Create a unified color scale
+color_scale1 <- scale_color_manual(values = setNames(brewer.pal(n = length(all_super_pathways1), name = "Paired"), all_super_pathways1))
+
+plot_adhd_w1 <- Result_table_Significant_adhd_w1_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week1-ADHD-adjusted (20/39)",
+        color = "Pathway"
+    )
+
+plot_asd_w1 <- Result_table_Significant_asd_w1_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week1-Autism-adjusted (20/93)",
+        color = "Pathway"
+    )
+
+# Create the second plot
+plot_NDD_w1 <- Result_table_Significant_neu_w1_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "Week1_Any NDDs-adjusted (20/20)",
+        color = "Pathway"
+    )
+# Create the first plot
+plot_adhd_6mth <- Result_table_Significant_adhd_6mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 months-ADHD-adjusted (20/47)",
+        color = "Pathway"
+    )
+
+plot_asd_6mth <- Result_table_Significant_asd_6mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 months-Autism-adjusted (18/18)",
+        color = "Pathway"
+    )
+
+# Create the second plot
+plot_NDD_6mth <- Result_table_Significant_neu_6mth_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 months-Any NDDs-adjusted (20/46)",
+        color = "Pathway"
+    )
+# 6yr
+plot_adhd_6yr <- Result_table_Significant_adhd_6yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 years-ADHD-adjusted (20/36)",
+        color = "Pathway"
+    )
+
+plot_asd_6yr <- Result_table_Significant_asd_6yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 years-Autism-adjusted (20/55)",
+        color = "Pathway"
+    )
+
+# 
+plot_NDD_6yr <- Result_table_Significant_neu_6yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "6 years-Any NDDs-adjusted (20/55)",
+        color = "Pathway"
+    )
+#10yr
+plot_adhd_10yr <- Result_table_Significant_adhd_10yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "10 years-ADHD-adjusted (20/44)",
+        color = "Pathway"
+    )
+
+plot_asd_10yr <- Result_table_Significant_asd_10yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "10 years-Autism-adjusted (20/21)",
+        color = "Pathway"
+    )
+
+# Create the second plot
+plot_NDD_10yr <- Result_table_Significant_neu_10yr_log_20 %>%
+    group_by(Super_pathway) %>%
+    mutate(CHEMICAL_NAME = fct_reorder(CHEMICAL_NAME, p.value)) %>%
+    ungroup() %>%
+    ggplot(aes(x = OR, y = CHEMICAL_NAME, color = Super_pathway)) +
+    geom_errorbar(aes(xmin = CIL, xmax = CIH), width = 0.2, size=0.8,color = "grey40") +
+    geom_point(size = 3) +
+    geom_text_repel(
+        aes(label = if_else(FDR < 0.05, "**", if_else(p.value < 0.05, "*", ""))),
+        box.padding = 0.15,
+        point.padding = 0.05,
+        size = 4, segment.color = 'grey50',
+        nudge_x = 0.15, 
+        nudge_y = 0, 
+        direction = "y"
+    ) +
+    geom_vline(xintercept = 0, linetype = "longdash", color = "grey50") +
+    color_scale1 +
+    theme_minimal(base_size = 14) +
+    theme(
+        axis.text.y = element_text(size = 14,color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(
+        y = "", x = "log(OR)", title = "10 years-Any NDDs-adjusted (20/47)",
+        color = "Pathway"
+    )
+
+# Apply minimal theme, remove grid lines, and set y-axis text color to black for each plot
+plot_NDD_w1 <- plot_NDD_w1 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_w1 <- plot_adhd_w1 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_w1 <- plot_asd_w1 + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_NDD_6mth <- plot_NDD_6mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_6mth <- plot_adhd_6mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_6mth <- plot_asd_6mth + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_NDD_6yr <- plot_NDD_6yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_6yr <- plot_adhd_6yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_6yr <- plot_asd_6yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_NDD_10yr <- plot_NDD_10yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_adhd_10yr <- plot_adhd_10yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+plot_asd_10yr <- plot_asd_10yr + theme_minimal() + theme(panel.grid = element_blank(), axis.text.y = element_text(color = "black"))
+# Extract the legend from one of the plots
+legend1 <- get_legend(plot_NDD_10yr + theme(legend.position = "right"))
+library(cowplot)
+# Combine the plots without legends
+combined_plots <- plot_grid(
+  plot_NDD_w1 + theme(legend.position = "none"),
+  plot_adhd_w1 + theme(legend.position = "none"),
+  plot_asd_w1 + theme(legend.position = "none"),
+  plot_NDD_6mth + theme(legend.position = "none"),
+  plot_adhd_6mth + theme(legend.position = "none"),
+  plot_asd_6mth + theme(legend.position = "none"),
+  plot_NDD_6yr + theme(legend.position = "none"),
+  plot_adhd_6yr + theme(legend.position = "none"),
+  plot_asd_6yr + theme(legend.position = "none"),
+ plot_NDD_10yr + theme(legend.position = "none"),
+  plot_adhd_10yr + theme(legend.position = "none"),
+  plot_asd_10yr + theme(legend.position = "none"),
+  ncol = 3,
+  labels = c("a", "b", "c", "d", "e", "f","g", "h", "i","j","k","l"),
+  label_x = 0.15,  # Adjust horizontal position of labels (move more toward the middle)
+  label_y = 0.95,  # Adjust vertical position of labels (move slightly down)
+  hjust = -0.2,    # Adjust horizontal justification of labels slightly
+  label_size = 14  # Font size for labels
+)
+
+# Add the legend to the top-right side of the combined plot
+Figure4 <- plot_grid(
+  combined_plots, 
+  legend1, 
+  ncol = 2,                  # Arrange combined plots and legend side by side
+  rel_widths = c(5, 1)       # Adjust relative widths to position the legend on the top right
+)
+
+# Display the combined plot output Figure 4
+Figure4
+
+```
