@@ -14,27 +14,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-library(ggforce)
-library(pheatmap)
-library(RColorBrewer)
-library(vegan)
 library(broom)
 library(ggstance)
-library(lubridate)
 library(readxl)
 library(ggpubr)
 library(janitor)
 library(rio)
 library(tidyr)
-library(caret)
-library(mlbench)
-library(doMC)
-library(caret)
-library(pROC)
-library(mixOmics)
-library(tidyverse)
-library(mixOmicsCaret)  
-library(mlbench)
 library(ggplot2)
 library(forcats)
 library(dplyr)
@@ -43,11 +29,6 @@ library(openxlsx)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-
-You can also embed plots, for example:
-
 ```{r pressure, echo=FALSE}
 
 load("~/Data/covariat_all_18.Rdata")
@@ -55,28 +36,18 @@ load("~/Data/diag_all_name.Rdata")
 
 all_annotation<-read.xlsx("~/Data/Chemical_Annotation_Common.xlsx")
 # Add "X" to the start of each cell in the specific column
-all_annotation$CHEM_ID <- paste("X", all_annotation$CHEM_ID, sep = "")
 
 longti_data<-read.xlsx("~/Data/all_anchor_norm_metabolome.xlsx")
 
-names(longti_data)[4:791] <- paste("X", names(longti_data)[4:791], sep = "")
-
 longti_data<-na.omit(longti_data)
 #remove unknown
-longti_data_2 <- longti_data[, !grepl("^X9999", names(longti_data))]
-filtered_df_diag0<-left_join(diag_all_name[,c(1,3,5,8)],longti_data_2, by="ABCNO")
-filtered_df_diag0<-na.omit(filtered_df_diag0)
 
+filtered_df_diag0<-left_join(diag_all_name[,c(1,3,5,8)],longti_data_2, by="ABCNO")
 ```
 
 ```{r}
-
-filtered_df_diag000<-filtered_df_diag0
-filtered_df_diag000$newID<- paste(filtered_df_diag000$ABCNO, filtered_df_diag000$TP, sep = "_")
-
-filtered_df_diag1<- filtered_df_diag000[,c(690,1:689)]
-
-X1 <- filtered_df_diag1[,c(8:690)]
+#PCA 
+X1 <- filtered_df_diag0[,c(8:690)]
 pca_result <- prcomp(as.matrix(X1), scale = TRUE)
 pc_scores <- data.frame(PC1 = pca_result$x[, 1], PC2 =pca_result$x[, 2])
 combined_data <- cbind(filtered_df_diag1[,c(1:7)], pc_scores)
